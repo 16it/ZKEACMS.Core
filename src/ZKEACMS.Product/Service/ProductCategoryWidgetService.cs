@@ -15,25 +15,38 @@ namespace ZKEACMS.Product.Service
     public class ProductCategoryWidgetService : WidgetService<ProductCategoryWidget>
     {
         private readonly IProductCategoryService _productCategoryService;
-        public ProductCategoryWidgetService(IWidgetBasePartService widgetService, IProductCategoryService productCategoryService, IApplicationContext applicationContext, ProductDbContext dbContext)
+        public ProductCategoryWidgetService(IWidgetBasePartService widgetService, IProductCategoryService productCategoryService, IApplicationContext applicationContext, CMSDbContext dbContext)
             : base(widgetService, applicationContext, dbContext)
         {
             _productCategoryService = productCategoryService;
-        }
-
-        public override DbSet<ProductCategoryWidget> CurrentDbSet
-        {
-            get
-            {
-                return (DbContext  as ProductDbContext).ProductCategoryWidget;
-            }
         }
 
         public override WidgetViewModelPart Display(WidgetBase widget, ActionContext actionContext)
         {
             ProductCategoryWidget currentWidget = widget as ProductCategoryWidget;
             int cate = actionContext.RouteData.GetCategory();
-
+            ProductCategory productCategory = null;
+            if (cate > 0)
+            {
+                productCategory = _productCategoryService.Get(cate);
+            }
+            if (actionContext.RouteData.GetCategoryUrl().IsNullOrEmpty() && productCategory != null)
+            {
+                if (productCategory.Url.IsNotNullAndWhiteSpace())
+                {
+                    actionContext.RedirectTo($"{actionContext.RouteData.GetPath()}/{productCategory.Url}", true);
+                }
+            }
+            if (productCategory != null)
+            {
+                var layout = actionContext.HttpContext.GetLayout();
+                if (layout != null && layout.Page != null)
+                {
+                    layout.Page.Title = productCategory.SEOTitle ?? productCategory.Title;
+                    layout.Page.MetaKeyWorlds = productCategory.SEOKeyWord;
+                    layout.Page.MetaDescription = productCategory.SEODescription;
+                }
+            }
             return widget.ToWidgetViewModelPart(new ProductCategoryWidgetViewModel
             {
                 Categorys = _productCategoryService.Get(m => m.ParentID == currentWidget.ProductCategoryID),

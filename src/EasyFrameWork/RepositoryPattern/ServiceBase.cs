@@ -1,3 +1,6 @@
+/* http://www.zkea.net/ 
+ * Copyright (c) ZKEASOFT. All rights reserved. 
+ * http://www.zkea.net/licenses */
 using Easy.LINQ;
 using Easy.Models;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +13,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using Easy.Extend;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Threading.Tasks;
 
 namespace Easy.RepositoryPattern
 {
@@ -20,7 +24,7 @@ namespace Easy.RepositoryPattern
         {
             ApplicationContext = applicationContext;
             DbContext = dbContext;
-            DbContext.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+            isWaitingSave = false;
         }
 
         public virtual DbContext DbContext
@@ -28,24 +32,57 @@ namespace Easy.RepositoryPattern
             get;
             set;
         }
-        public abstract DbSet<T> CurrentDbSet { get; }
+        public virtual DbSet<T> CurrentDbSet { get { return DbContext.Set<T>(); } }
 
         public IApplicationContext ApplicationContext { get; set; }
 
+        private bool isWaitingSave;
+
         public void BeginTransaction(Action action)
         {
-            using (var transaction = DbContext.Database.BeginTransaction())
+            if (DbContext.Database.CurrentTransaction == null)
             {
-                try
+                using (var transaction = DbContext.Database.BeginTransaction())
                 {
-                    action.Invoke();
-                    transaction.Commit();
+                    try
+                    {
+                        action.Invoke();
+                        transaction.Commit();
+                    }
+                    catch (Exception ex)
+                    {
+                        transaction.Rollback();
+                        throw ex;
+                    }
                 }
-                catch (Exception ex)
+            }
+            else
+            {
+                action.Invoke();
+            }
+        }
+        public TEntity BeginTransaction<TEntity>(Func<TEntity> action)
+        {
+            if (DbContext.Database.CurrentTransaction == null)
+            {
+                using (var transaction = DbContext.Database.BeginTransaction())
                 {
-                    transaction.Rollback();
-                    throw ex;
+                    try
+                    {
+                        var result = action.Invoke();
+                        transaction.Commit();
+                        return result;
+                    }
+                    catch (Exception ex)
+                    {
+                        transaction.Rollback();
+                        throw ex;
+                    }
                 }
+            }
+            else
+            {
+                return action.Invoke();
             }
         }
         protected ServiceResult<T> Validate(T item)
@@ -99,7 +136,10 @@ namespace Easy.RepositoryPattern
                 editor.LastUpdateDate = DateTime.Now;
             }
             CurrentDbSet.Add(item);
-            DbContext.SaveChanges();
+            if (!isWaitingSave)
+            {
+                SaveChanges();
+            }
             return result;
         }
         public virtual ServiceResult<T> AddRange(params T[] items)
@@ -128,20 +168,32 @@ namespace Easy.RepositoryPattern
                 }
             }
             CurrentDbSet.AddRange(items);
-            DbContext.SaveChanges();
+            if (!isWaitingSave)
+            {
+                SaveChanges();
+            }
             return result;
         }
+
         public virtual IQueryable<T> Get()
         {
             return CurrentDbSet;
         }
         public virtual T GetSingle(Expression<Func<T, bool>> filter)
         {
-            return CurrentDbSet.Single(filter);
+            return Get().Single(filter);
+        }
+        public virtual async Task<T> GetSingleAsync(Expression<Func<T, bool>> filter)
+        {
+            return await Get().SingleAsync(filter);
         }
         public virtual IList<T> Get(Expression<Func<T, bool>> filter)
         {
-            return CurrentDbSet.Where(filter).ToList();
+            return Get().Where(filter).ToList();
+        }
+        public virtual async Task<IList<T>> GetAsync(Expression<Func<T, bool>> filter)
+        {
+            return await Get().Where(filter).ToListAsync();
         }
         public virtual IList<T> Get(Expression<Func<T, bool>> filter, Pagination pagination)
         {
@@ -149,11 +201,48 @@ namespace Easy.RepositoryPattern
             IQueryable<T> result;
             if (filter != null)
             {
-                result = CurrentDbSet.Where(filter);
+                result = Get().Where(filter);
             }
             else
             {
-                result = CurrentDbSet;
+                result = Get();
+            }
+            if (pagination.OrderBy != null || pagination.OrderByDescending != null)
+            {
+                if (pagination.OrderBy != null)
+                {
+                    result = result.OrderBy(pagination.OrderBy);
+                }
+                else
+                {
+                    result = result.OrderByDescending(pagination.OrderByDescending);
+                }
+
+                if (pagination.ThenBy != null || pagination.ThenByDescending != null)
+                {
+                    if (pagination.ThenBy != null)
+                    {
+                        result = (result as IOrderedQueryable<T>).ThenBy(pagination.ThenBy);
+                    }
+                    else
+                    {
+                        result = (result as IOrderedQueryable<T>).ThenByDescending(pagination.ThenByDescending);
+                    }
+                }
+            }
+            return result.Skip(pagination.PageIndex * pagination.PageSize).Take(pagination.PageSize).ToList();
+        }
+        public virtual async Task<IList<T>> GetAsync(Expression<Func<T, bool>> filter, Pagination pagination)
+        {
+            pagination.RecordCount = await CountAsync(filter);
+            IQueryable<T> result;
+            if (filter != null)
+            {
+                result = Get().Where(filter);
+            }
+            else
+            {
+                result = Get();
             }
             if (pagination.OrderBy != null || pagination.OrderByDescending != null)
             {
@@ -166,21 +255,33 @@ namespace Easy.RepositoryPattern
                     result = result.OrderByDescending(pagination.OrderByDescending);
                 }
             }
-            return result.Skip(pagination.PageIndex * pagination.PageSize).Take(pagination.PageSize).ToList();
+            return await result.Skip(pagination.PageIndex * pagination.PageSize).Take(pagination.PageSize).ToListAsync();
         }
         public virtual T Get(params object[] primaryKey)
         {
             return CurrentDbSet.Find(primaryKey);
         }
+        public virtual async Task<T> GetAsync(params object[] primaryKey)
+        {
+            return await CurrentDbSet.FindAsync(primaryKey);
+        }
         public virtual int Count(Expression<Func<T, bool>> filter)
         {
             if (filter != null)
             {
-                return CurrentDbSet.Where(filter).Count();
+                return Get().Where(filter).Count();
             }
-            return CurrentDbSet.Count();
+            return Get().Count();
         }
-        public virtual ServiceResult<T> Update(T item, bool saveImmediately = true)
+        public virtual async Task<int> CountAsync(Expression<Func<T, bool>> filter)
+        {
+            if (filter != null)
+            {
+                return await Get().Where(filter).CountAsync();
+            }
+            return await Get().CountAsync();
+        }
+        public virtual ServiceResult<T> Update(T item)
         {
             var result = Validate(item);
             if (result.HasViolation)
@@ -198,9 +299,9 @@ namespace Easy.RepositoryPattern
                 editor.LastUpdateDate = DateTime.Now;
             }
             CurrentDbSet.Update(item);
-            if (saveImmediately)
+            if (!isWaitingSave)
             {
-                DbContext.SaveChanges();
+                SaveChanges();
             }
             return result;
         }
@@ -225,7 +326,10 @@ namespace Easy.RepositoryPattern
                 }
             }
             CurrentDbSet.UpdateRange(items);
-            DbContext.SaveChanges();
+            if (!isWaitingSave)
+            {
+                SaveChanges();
+            }
             return new ServiceResult<T>();
         }
         public void Remove(params object[] primaryKey)
@@ -236,34 +340,44 @@ namespace Easy.RepositoryPattern
                 Remove(item);
             }
         }
-        public virtual void Remove(T item, bool saveImmediately = true)
+        public virtual void Remove(T item)
         {
             CurrentDbSet.Remove(item);
-            if (saveImmediately)
+            if (!isWaitingSave)
             {
-                DbContext.SaveChanges();
+                SaveChanges();
             }
-
         }
         public virtual void Remove(Expression<Func<T, bool>> filter)
         {
             CurrentDbSet.RemoveRange(CurrentDbSet.Where(filter));
-            DbContext.SaveChanges();
-
+            if (!isWaitingSave)
+            {
+                SaveChanges();
+            }
         }
         public virtual void RemoveRange(params T[] items)
         {
             CurrentDbSet.RemoveRange(items);
-            DbContext.SaveChanges();
+            if (!isWaitingSave)
+            {
+                SaveChanges();
+            }
         }
         public virtual void Dispose()
         {
             //DbContext.Dispose();
         }
 
-        public void SaveChanges()
+        public virtual void SaveChanges()
         {
             DbContext.SaveChanges();
+            isWaitingSave = false;
+        }
+
+        public virtual void BeginBulkSave()
+        {
+            isWaitingSave = true;
         }
     }
 }

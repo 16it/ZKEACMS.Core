@@ -8,13 +8,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ZKEACMS.Sitemap
 {
-    public class SitemapDbContext : DbContextBase
+    public class SitemapDbContext : DbContext
     {
-        public SitemapDbContext(IEnumerable<IOnModelCreating> modelCreatings, IOnDatabaseConfiguring configuring) : base(modelCreatings, configuring)
+        public SitemapDbContext(DbContextOptions<SitemapDbContext> options) : base(options)
         {
         }
-
         internal DbSet<ArticleListWidget> ArticleListWidget { get; set; }
+        internal DbSet<ArticleDetailWidget> ArticleDetailWidget { get; set; }
         internal DbSet<ProductListWidget> ProductListWidget { get; set; }
+        internal DbSet<ProductDetailWidget> ProductDetailWidget { get; set; }
     }
 }

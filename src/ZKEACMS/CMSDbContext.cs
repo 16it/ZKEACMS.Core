@@ -21,8 +21,9 @@ namespace ZKEACMS
 {
     public class CMSDbContext : EasyDbContext
     {
-        public CMSDbContext(IEnumerable<IOnModelCreating> modelCreatings, IOnDatabaseConfiguring configuring) : base(modelCreatings, configuring)
+        public CMSDbContext(DbContextOptions<CMSDbContext> dbContextOptions, IEnumerable<IOnModelCreating> modelCreatings) : base(dbContextOptions)
         {
+            ModelCreatings = modelCreatings;
         }
 
         internal DbSet<WidgetBasePart> WidgetBasePart { get; set; }
@@ -45,5 +46,6 @@ namespace ZKEACMS
         internal DbSet<ScriptWidget> ScriptWidget { get; set; }
         internal DbSet<StyleSheetWidget> StyleSheetWidget { get; set; }
         internal DbSet<VideoWidget> VideoWidget { get; set; }
+        internal DbSet<BreadcrumbWidget> BreadcrumbWidget { get; set; }
     }
 }

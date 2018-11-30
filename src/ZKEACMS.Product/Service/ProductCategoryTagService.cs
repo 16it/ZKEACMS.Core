@@ -5,32 +5,60 @@ using System.Collections.Generic;
 using ZKEACMS.Product.Models;
 using Easy;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
+using System.Linq;
 
 namespace ZKEACMS.Product.Service
 {
     public class ProductCategoryTagService : ServiceBase<ProductCategoryTag>, IProductCategoryTagService
     {
         private readonly IProductTagService _productTagService;
-        public ProductCategoryTagService(IApplicationContext applicationContext,IProductTagService productTagService, ProductDbContext dbContext) : base(applicationContext, dbContext)
+        public ProductCategoryTagService(IApplicationContext applicationContext, IProductTagService productTagService, CMSDbContext dbContext) : base(applicationContext, dbContext)
         {
             _productTagService = productTagService;
         }
 
-        public override DbSet<ProductCategoryTag> CurrentDbSet
+        public override void Remove(ProductCategoryTag item)
         {
-            get
+            BeginTransaction(() =>
             {
-                return (DbContext as ProductDbContext).ProductCategoryTag;
-            }
+                _productTagService.Remove(m => m.TagId == item.ID);
+                base.Remove(item);
+
+                var children = LoadChildren(item);
+                var ids = children.Select(m => m.ID).ToArray();
+                _productTagService.Remove(m => ids.Contains(m.TagId));
+                RemoveRange(children.ToArray());
+
+            });
         }
-        public override void Remove(ProductCategoryTag item, bool saveImmediately = true)
+        private IEnumerable<ProductCategoryTag> LoadChildren(ProductCategoryTag tag)
         {
-            _productTagService.Remove(m => m.TagId == item.ID);
-            if (item.ParentId == 0)
+            List<ProductCategoryTag> result = new List<ProductCategoryTag>();
+            var children = Get(m => m.ParentId == tag.ID);
+            result.AddRange(children);
+            foreach (var item in children)
             {
-                Remove(m => m.ParentId == item.ID);
+                result.AddRange(LoadChildren(item));
             }
-            base.Remove(item, saveImmediately);
+            return result;
+        }
+        public override void Remove(Expression<Func<ProductCategoryTag, bool>> filter)
+        {
+            BeginTransaction(() =>
+            {
+                var tags = Get(filter);
+                var ids = tags.Select(m => m.ID).ToArray();
+                _productTagService.Remove(m => ids.Contains(m.TagId));
+                RemoveRange(tags.ToArray());
+                foreach (var item in tags)
+                {
+                    var children = LoadChildren(item);
+                    var childIds = children.Select(m => m.ID).ToArray();
+                    _productTagService.Remove(m => ids.Contains(m.TagId));
+                    RemoveRange(children.ToArray());
+                }
+            });
         }
     }
 }

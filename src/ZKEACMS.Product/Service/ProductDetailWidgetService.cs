@@ -7,26 +7,19 @@ using ZKEACMS.Product.Models;
 using ZKEACMS.Widget;
 using Microsoft.AspNetCore.Mvc;
 using System.Linq;
+using Easy.Extend;
 
 namespace ZKEACMS.Product.Service
 {
     public class ProductDetailWidgetService : WidgetService<ProductDetailWidget>
     {
         private readonly IProductService _productService;
-        public ProductDetailWidgetService(IWidgetBasePartService widgetService, IProductService productService, IApplicationContext applicationContext, ProductDbContext dbContext)
+        public ProductDetailWidgetService(IWidgetBasePartService widgetService, IProductService productService, IApplicationContext applicationContext, CMSDbContext dbContext)
             : base(widgetService, applicationContext, dbContext)
         {
             _productService = productService;
         }
-
-        public override DbSet<ProductDetailWidget> CurrentDbSet
-        {
-            get
-            {
-                return (DbContext as ProductDbContext).ProductDetailWidget;
-            }
-        }
-
+        
         public override WidgetViewModelPart Display(WidgetBase widget, ActionContext actionContext)
         {
             int productId = actionContext.RouteData.GetPost();
@@ -34,12 +27,16 @@ namespace ZKEACMS.Product.Service
             if (productId != 0)
             {
                 product = _productService.Get(productId);
+                if (product !=null && product.Url.IsNotNullAndWhiteSpace() && actionContext.RouteData.GetProductUrl().IsNullOrWhiteSpace())
+                {
+                    actionContext.RedirectTo($"{actionContext.RouteData.GetPath()}/{product.Url}.html", true);
+                }
             }
             if (product == null && ApplicationContext.IsAuthenticated)
             {
                 foreach (var item in _productService.Get().AsQueryable().OrderByDescending(m => m.ID).Take(1))
                 {
-                    product = item;
+                    product = _productService.Get(item.ID);
                 }
             }
             if (product == null)

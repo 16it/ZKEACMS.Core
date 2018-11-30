@@ -15,6 +15,8 @@ using DocumentFormat.OpenXml.Spreadsheet;
 using DocumentFormat.OpenXml;
 using System.IO;
 using Easy.DataTransfer;
+using ZKEACMS.FormGenerator.Service.Validator;
+using Easy.Notification;
 
 namespace ZKEACMS.FormGenerator.Service
 {
@@ -22,13 +24,22 @@ namespace ZKEACMS.FormGenerator.Service
     {
         private readonly IFormService _formService;
         private readonly IFormDataItemService _formDataItemService;
-        public FormDataService(IApplicationContext applicationContext, FormGeneratorDbContext dbContext, IFormService formService, IFormDataItemService formDataItemService) : base(applicationContext, dbContext)
+        private readonly IEnumerable<IFormDataValidator> _formDataValidators;
+        private readonly INotificationManager _notificationManager;
+        public FormDataService(IApplicationContext applicationContext,
+            CMSDbContext dbContext,
+            IFormService formService,
+            IFormDataItemService formDataItemService,
+            IEnumerable<IFormDataValidator> formDataValidators,
+            INotificationManager notificationManager) :
+            base(applicationContext, dbContext)
         {
             _formService = formService;
             _formDataItemService = formDataItemService;
+            _formDataValidators = formDataValidators;
+            _notificationManager = notificationManager;
         }
 
-        public override DbSet<FormData> CurrentDbSet => (DbContext as FormGeneratorDbContext).FormData;
         public override ServiceResult<FormData> Add(FormData item)
         {
             var result = base.Add(item);
@@ -84,10 +95,16 @@ namespace ZKEACMS.FormGenerator.Service
             }
             return formData;
         }
-        public void SaveForm(IFormCollection formCollection, string formId)
+        public ServiceResult<FormData> SaveForm(IFormCollection formCollection, string formId)
         {
+            var result = new ServiceResult<FormData>();
             var form = _formService.Get(formId);
-            var formData = new FormData { FormId = formId, Datas = new List<FormDataItem>() };
+            if (form == null)
+            {
+                result.RuleViolations.Add(new RuleViolation("Form", "Form not found!"));
+                return result;
+            }
+            var formData = new FormData { FormId = formId, Datas = new List<FormDataItem>(), Form = form };
             Regex regex = new Regex(@"(\w+)\[(\d+)\]");
 
             foreach (var item in formCollection.Keys)
@@ -110,6 +127,15 @@ namespace ZKEACMS.FormGenerator.Service
                             dataitem.FieldValue = option.DisplayText;
                         }
                     }
+                    foreach (var validator in _formDataValidators)
+                    {
+                        string message;
+                        if (!validator.Validate(field, dataitem, out message))
+                        {
+                            result.RuleViolations.Add(new RuleViolation(field.DisplayName, message));
+                            return result;
+                        }
+                    }
                     formData.Datas.Add(dataitem);
                 }
             }
@@ -117,12 +143,23 @@ namespace ZKEACMS.FormGenerator.Service
             {
                 formData.Title = formData.Datas.FirstOrDefault().FieldValue;
             }
-            Add(formData);
+            result = Add(formData);
+            if (!result.HasViolation && form.NotificationReceiver.IsNotNullAndWhiteSpace())
+            {
+                _notificationManager.Send(new RazorEmailNotice
+                {
+                    Subject = "新的表单提醒",
+                    To = form.NotificationReceiver.Split(new char[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries),
+                    Model = Get(formData.ID),
+                    TemplatePath = "~/wwwroot/Plugins/ZKEACMS.FormGenerator/EmailTemplates/FormDataNotification.cshtml"
+                });
+            }
+            return result;
         }
-        public override void Remove(FormData item, bool saveImmediately = true)
+        public override void Remove(FormData item)
         {
             _formDataItemService.Remove(m => m.FormDataId == item.ID);
-            base.Remove(item, saveImmediately);
+            base.Remove(item);
         }
 
         public MemoryStream Export(int id)

@@ -11,6 +11,11 @@ using System.Threading.Tasks;
 using ZKEACMS.Shop.Payment;
 using ZKEACMS.Shop.Service;
 using Easy.Mvc.Extend;
+using ZKEACMS.Setting;
+using Easy.Extend;
+using Newtonsoft.Json;
+using Easy.Mvc.Authorize;
+using ZKEACMS.DataArchived;
 
 namespace ZKEACMS.Shop.Controllers
 {
@@ -19,13 +24,13 @@ namespace ZKEACMS.Shop.Controllers
         private readonly IAlipayService _alipayService;
         private readonly IOrderService _orderService;
         private readonly IOrderItemService _orderItemService;
-        private readonly IOptions<AliPayConfig> _aliPayConfig;
-        public AliPayController(IAlipayService alipayService, IOrderService orderService, IOrderItemService orderItemService, IOptions<AliPayConfig> aliPayConfig)
+        public AliPayController(IAlipayService alipayService,
+            IOrderService orderService,
+            IOrderItemService orderItemService )
         {
             _alipayService = alipayService;
             _orderService = orderService;
             _orderItemService = orderItemService;
-            _aliPayConfig = aliPayConfig;
         }
 
         public IActionResult Pay(string orderId)
@@ -55,7 +60,7 @@ namespace ZKEACMS.Shop.Controllers
 
             _orderService.BeginPay(order);
 
-            return Redirect(_aliPayConfig.Value.Gatewayurl + "?" + response.Body);
+            return Redirect(_alipayService.Options.Gatewayurl + "?" + response.Body);
         }
         [HttpGet]
         public IActionResult Callback()
@@ -94,7 +99,7 @@ namespace ZKEACMS.Shop.Controllers
             {
                 orderId = sArray["out_trade_no"];
                 var order = _orderService.Get(orderId);
-                if (order != null && order.OrderStatus == (int)OrderStatus.UnPaid && order.Total == Decimal.Parse(sArray["total_amount"]) && _aliPayConfig.Value.AppId == sArray["app_id"])
+                if (order != null && order.OrderStatus == (int)OrderStatus.UnPaid && order.Total == Decimal.Parse(sArray["total_amount"]) && _alipayService.Options.AppId == sArray["app_id"])
                 {
                     _orderService.CompletePay(order, Gateways.AliPay, sArray["trade_no"]);
                     return true;
@@ -138,6 +143,6 @@ namespace ZKEACMS.Shop.Controllers
 
         }
 
-        #endregion
+        #endregion        
     }
 }

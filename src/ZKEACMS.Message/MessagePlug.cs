@@ -4,14 +4,15 @@
  * http://www.zkea.net/licenses 
  */
 
+using Easy;
 using Easy.Mvc.Resource;
 using Easy.Mvc.Route;
+using Easy.RepositoryPattern;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
-using ZKEACMS.Message.Service;
-using Easy;
 using ZKEACMS.Message.Models;
+using ZKEACMS.Message.Service;
 using ZKEACMS.WidgetTemplate;
 
 namespace ZKEACMS.Message
@@ -53,6 +54,14 @@ namespace ZKEACMS.Message
                         Order = 2,
                         Icon = "glyphicon-comment",
                         PermissionKey = PermissionKeys.ViewComments
+                    },
+                    new AdminMenu
+                    {
+                        Title = "配置通知邮箱",
+                        Url = "~/Admin/MessageNotification/Config",
+                        Order = 3,
+                        Icon = "glyphicon-flag",
+                        PermissionKey = PermissionKeys.ManageMessageNotification
                     }
                 }
             };
@@ -66,6 +75,7 @@ namespace ZKEACMS.Message
             yield return new PermissionDescriptor(PermissionKeys.ManageMessage, "留言评论", "管理留言", "");
             yield return new PermissionDescriptor(PermissionKeys.ViewComments, "留言评论", "查看评论", "");
             yield return new PermissionDescriptor(PermissionKeys.ManageComments, "留言评论", "管理评论", "");
+            yield return new PermissionDescriptor(PermissionKeys.ManageMessageNotification, "留言评论", "管理通知邮箱", "");
         }
 
         public override IEnumerable<WidgetTemplateEntity> WidgetServiceTypes()
@@ -99,6 +109,8 @@ namespace ZKEACMS.Message
 
         public override void ConfigureServices(IServiceCollection serviceCollection)
         {
+            serviceCollection.AddSingleton<IOnModelCreating, EntityFrameWorkModelCreating>();
+
             serviceCollection.AddTransient<IMessageService, MessageService>();
             serviceCollection.AddTransient<ICommentsService, CommentsService>();
 
@@ -107,6 +119,7 @@ namespace ZKEACMS.Message
             serviceCollection.ConfigureMetaData<MessageBoxWidget, MessageBoxWidgetMetaData>();
             serviceCollection.ConfigureMetaData<MessageEntity, MessageMetaData>();
             serviceCollection.ConfigureMetaData<MessageWidget, MessageWidgetMetaData>();
+            serviceCollection.ConfigureMetaData<MessageNotificationConfig, MessageNotificationConfigMetaData>();
 
             serviceCollection.Configure<MessageBoxWidget>(option =>
             {
@@ -118,8 +131,7 @@ namespace ZKEACMS.Message
                 option.DataSourceLinkTitle = "评论";
                 option.DataSourceLink = "~/admin/Comments";
             });
-
-            serviceCollection.AddDbContext<MessageDbContext>();
+            
         }
 
         protected override void InitScript(Func<string, ResourceHelper> script)

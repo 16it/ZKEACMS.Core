@@ -25,7 +25,7 @@ namespace ZKEACMS.Controllers
     {
         private readonly IUserService _userService;
         private readonly INotifyService _notifyService;
-        private readonly IDataProtector _dataProtector;
+        private readonly IDataProtectionProvider _dataProtectionProvider;
         private readonly IApplicationContextAccessor _applicationContextAccessor;
         private readonly ILogger<AccountController> _logger;
 
@@ -37,7 +37,7 @@ namespace ZKEACMS.Controllers
         {
             _userService = userService;
             _notifyService = notifyService;
-            _dataProtector = dataProtectionProvider.CreateProtector("ResetPassword");
+            _dataProtectionProvider = dataProtectionProvider;
             _applicationContextAccessor = applicationContextAccessor;
             _logger = logger;
         }
@@ -58,7 +58,7 @@ namespace ZKEACMS.Controllers
                 identity.AddClaim(new Claim(ClaimTypes.Name, user.UserID));
                 await HttpContext.SignInAsync(DefaultAuthorizeAttribute.DefaultAuthenticationScheme, new ClaimsPrincipal(identity));
 
-                if (ReturnUrl.IsNullOrEmpty())
+                if (ReturnUrl.IsNullOrEmpty() || !Url.IsLocalUrl(ReturnUrl))
                 {
                     return RedirectToAction("Index", "Dashboard");
                 }
@@ -143,7 +143,7 @@ namespace ZKEACMS.Controllers
                 identity.AddClaim(new Claim(ClaimTypes.Name, user.UserID));
                 await HttpContext.SignInAsync(CustomerAuthorizeAttribute.CustomerAuthenticationScheme, new ClaimsPrincipal(identity));
 
-                if (ReturnUrl.IsNullOrEmpty())
+                if (ReturnUrl.IsNullOrEmpty() || !Url.IsLocalUrl(ReturnUrl))
                 {
                     return RedirectToAction("Index");
                 }
@@ -221,7 +221,8 @@ namespace ZKEACMS.Controllers
         {
             try
             {
-                if (pt.IsNullOrWhiteSpace() || _dataProtector.Unprotect(pt) != token)
+                var dataProtector = _dataProtectionProvider.CreateProtector("ResetPassword");
+                if (pt.IsNullOrWhiteSpace() || dataProtector.Unprotect(pt) != token)
                 {
                     ViewBag.Errormessage = "访问的重置链接无效，请重新申请";
                 }
@@ -238,7 +239,8 @@ namespace ZKEACMS.Controllers
         {
             try
             {
-                if (user.Protect.IsNotNullAndWhiteSpace() && _dataProtector.Unprotect(user.Protect) == user.ResetToken)
+                var dataProtector = _dataProtectionProvider.CreateProtector("ResetPassword");
+                if (user.Protect.IsNotNullAndWhiteSpace() && dataProtector.Unprotect(user.Protect) == user.ResetToken)
                 {
                     if (_userService.ResetPassWord(user.ResetToken, user.PassWordNew))
                     {

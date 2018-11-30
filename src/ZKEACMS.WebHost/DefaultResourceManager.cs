@@ -34,7 +34,7 @@ namespace ZKEACMS.WebHost
 
             script("validate")
                 .Include($"{LibraryPath}/jquery-validation/dist/jquery.validate.js", $"{LibraryPath}/jquery-validation/dist/jquery.validate.min.js")
-                .Include($"{LibraryPath}/jquery-validation-unobtrusive/jquery.validate.unobtrusive.js", $"{LibraryPath}/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js");
+                .Include($"{LibraryPath}/jquery-validation-unobtrusive/src/jquery.validate.unobtrusive.js");
 
             script("jsTree")
                 .Include($"{LibraryPath}/jstree/dist/jstree.js", $"{LibraryPath}/jstree/dist/jstree.min.js");
@@ -54,6 +54,9 @@ namespace ZKEACMS.WebHost
                 .Include($"{ScriptPath}/admin.js", $"{ScriptPath}/admin.min.js")
                 .Include($"{LibraryPath}/CryptoJS/components/core.js", $"{LibraryPath}/CryptoJS/components/core-min.js")
                 .Include($"{LibraryPath}/CryptoJS/components/enc-base64.js", $"{LibraryPath}/CryptoJS/components/enc-base64-min.js")
+                .Include($"{LibraryPath}/slimscroll/jquery.slimscroll.min.js", $"{LibraryPath}/slimscroll/jquery.slimscroll.min.js");
+
+            script("slimscroll")
                 .Include($"{LibraryPath}/slimscroll/jquery.slimscroll.min.js", $"{LibraryPath}/slimscroll/jquery.slimscroll.min.js");
 
             script("tinymce")
@@ -122,6 +125,9 @@ namespace ZKEACMS.WebHost
 
             style("datepicker")
                 .Include($"{LibraryPath}/bootstrap-datepicker/dist/css/bootstrap-datepicker3.css", $"{LibraryPath}/bootstrap-datepicker/dist/css/bootstrap-datepicker3.min.css");
+
+            style("rule")
+                .Include($"{StylePath}/rule.css", $"{StylePath}/rule.min.css");
         }
     }
 }

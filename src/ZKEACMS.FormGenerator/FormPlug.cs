@@ -14,6 +14,7 @@ using ZKEACMS.FormGenerator.Service;
 using Easy;
 using ZKEACMS.FormGenerator.Models;
 using ZKEACMS.WidgetTemplate;
+using ZKEACMS.FormGenerator.Service.Validator;
 
 namespace ZKEACMS.FormGenerator
 {
@@ -53,7 +54,7 @@ namespace ZKEACMS.FormGenerator
                     }
                 },
                 Icon = "glyphicon-list-alt",
-                Order = 10
+                Order = 12
             };
         }
 
@@ -101,6 +102,15 @@ namespace ZKEACMS.FormGenerator
 
         public override void ConfigureServices(IServiceCollection serviceCollection)
         {
+            serviceCollection.AddSingleton<IOnModelCreating, EntityFrameWorkModelCreating>();
+
+            serviceCollection.AddTransient<IFormDataValidator, DateTimeFormDataValidator>();
+            serviceCollection.AddTransient<IFormDataValidator, EmailFormDataValidator>();
+            serviceCollection.AddTransient<IFormDataValidator, NumberFormDataValidator>();
+            serviceCollection.AddTransient<IFormDataValidator, RequiredFormDataValidator>();
+            serviceCollection.AddTransient<IFormDataValidator, MaxLengthFormDataValidator>();
+            serviceCollection.AddTransient<IFormDataValidator, RegexPatternValidator>();
+
             serviceCollection.TryAddTransient<IFormService, FormService>();
             serviceCollection.TryAddTransient<IFormDataService, FormDataService>();
             serviceCollection.TryAddTransient<IFormDataItemService, FormDataItemService>();
@@ -113,9 +123,7 @@ namespace ZKEACMS.FormGenerator
             {
                 option.DataSourceLinkTitle = "表单";
                 option.DataSourceLink = "~/admin/Form";
-            });
-
-            serviceCollection.AddDbContext<FormGeneratorDbContext>();
+            });            
         }
     }
 }
